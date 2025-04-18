@@ -1,0 +1,68 @@
+---
+- name: Provisioning EC2 instances using Ansible
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: provisioning
+
+  vars:
+    keypair: springclasskey
+    instance_type: t2.small
+    image: ami-0e1bed4f06a3b463d
+    wait: yes
+    group: webserver
+    count: 1
+    region: us-east-1
+    security_group: my-jenkins-security-grp
+
+  tasks:
+    - name: Task #1 - Create Security Group
+      amazon.aws.ec2_security_group:
+        name: "{{ security_group }}"
+        description: Security Group for webserver Servers
+        region: "{{ region }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 8080
+            to_port: 8080
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+        rules_egress:
+          - proto: all
+            cidr_ip: 0.0.0.0/0
+      register: basic_firewall
+      delegate_to: localhost
+
+    - name: Task #2 - Launch the new EC2 Instance
+      amazon.aws.ec2_instance:
+        name: "MyTargetEC2Instance"
+        key_name: "{{ keypair }}"
+        instance_type: "{{ instance_type }}"
+        image_id: "{{ image }}"
+        wait: yes
+        region: "{{ region }}"
+        count: "{{ count }}"
+        network:
+          assign_public_ip: yes
+        vpc_subnet_id: ""  # Add your subnet ID if needed
+        security_group: "{{ security_group }}"
+        tags:
+          Name: "MyTargetEC2Instance"
+      register: ec2
+      delegate_to: localhost
+
+    - name: Task #3 - Debug EC2 instance output
+      debug:
+        var: ec2
+
+    - name: Task #4 - Display instance info
+      debug:
+        msg: "Instance {{ item.instance_id }} launched with public IP {{ item.public_ip_address }}"
+      loop: "{{ ec2.instances }}"
